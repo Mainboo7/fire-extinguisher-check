@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>소화기 점검 — 분당제생병원</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --red:#E24B4A; --red-light:#FCEBEB; --red-dark:#791F1F;
+  --green:#3B6D11; --green-light:#EAF3DE; --green-mid:#639922;
+  --gray:#888780; --gray-light:#F1EFE8; --gray-dark:#444441;
+  --blue:#185FA5; --blue-light:#E6F1FB; --blue-dark:#0C447C;
+  --amber:#BA7517; --amber-light:#FAEEDA;
+  --border:rgba(0,0,0,0.10);
+  --radius:14px; --radius-sm:9px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Noto Sans KR',sans-serif;background:#f4f3ef;color:#2C2C2A;min-height:100vh;}
+
+/* 탭 */
+.tab-bar{position:sticky;top:0;z-index:100;background:#fff;border-bottom:0.5px solid var(--border);display:flex;}
+.tab-btn{flex:1;padding:13px 4px;border:none;background:none;font-size:12px;font-weight:500;color:var(--gray);cursor:pointer;border-bottom:2.5px solid transparent;}
+.tab-btn.active{color:var(--red);border-bottom-color:var(--red);}
+
+.page{display:none;padding:16px;max-width:480px;margin:0 auto;}
+.page.active{display:block;}
+.section-label{font-size:11px;font-weight:600;color:var(--gray);letter-spacing:0.07em;text-transform:uppercase;margin:18px 0 8px;}
+
+.card{background:#fff;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+.btn{display:block;width:100%;padding:15px;border:none;border-radius:var(--radius);font-size:15px;font-weight:600;cursor:pointer;}
+.btn:active{opacity:0.75;}
+.btn-red{background:var(--red);color:#fff;}
+.btn-green{background:var(--green-mid);color:#fff;}
+.btn-gray{background:var(--gray-light);color:var(--gray-dark);border:0.5px solid var(--border);}
+
+/* 건물 선택 */
+.building-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
+.building-btn{background:#fff;border:0.5px solid var(--border);border-radius:var(--radius);padding:16px 8px;text-align:center;cursor:pointer;transition:all 0.15s;}
+.building-btn:active,.building-btn.active{background:var(--red-light);border-color:var(--red);}
+.building-btn .b-icon{font-size:24px;margin-bottom:6px;}
+.building-btn .b-name{font-size:13px;font-weight:600;color:var(--gray-dark);}
+.building-btn .b-count{font-size:11px;color:var(--gray);margin-top:2px;}
+.building-btn.active .b-name{color:var(--red-dark);}
+
+/* 진행바 */
+.prog-track{background:#e0dfd8;border-radius:4px;height:6px;margin:6px 0 3px;}
+.prog-fill{height:100%;border-radius:4px;background:var(--green-mid);transition:width 0.4s;}
+.prog-text{font-size:11px;color:var(--gray);text-align:right;}
+
+/* 소화기 그리드 */
+.ext-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+.ext-card{background:#fff;border:0.5px solid var(--border);border-radius:var(--radius);padding:13px;cursor:pointer;}
+.ext-card:active{background:var(--gray-light);}
+.ext-card.is-done{border-color:#97C459;}
+.ext-card.is-fail{border-color:var(--red);}
+.ec-id{font-size:19px;font-weight:800;color:var(--red-dark);}
+.ext-card.is-done .ec-id{color:var(--green);}
+.ec-loc{font-size:11px;color:var(--gray);margin-top:3px;line-height:1.4;}
+.badge{display:inline-block;margin-top:8px;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:600;}
+.badge-done{background:var(--green-light);color:var(--green);}
+.badge-fail{background:var(--red-light);color:var(--red-dark);}
+.badge-pending{background:var(--gray-light);color:var(--gray);}
+
+/* 오버레이 폼 */
+.overlay{display:none;position:fixed;inset:0;background:#f4f3ef;z-index:200;overflow-y:auto;}
+.overlay.show{display:block;}
+.form-header{padding:22px 20px;background:var(--red-light);border-bottom:0.5px solid var(--border);}
+.form-building{font-size:11px;font-weight:600;color:var(--red);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:4px;}
+.form-ext-id{font-size:34px;font-weight:800;color:var(--red-dark);letter-spacing:-0.02em;}
+.form-location{font-size:14px;color:var(--red);margin-top:4px;font-weight:500;}
+.form-meta{font-size:12px;color:var(--gray);margin-top:2px;}
+
+.field-wrap{padding:14px 16px;border-bottom:0.5px solid var(--border);}
+.field-wrap:last-child{border-bottom:none;}
+.field-label{font-size:12px;color:var(--gray);margin-bottom:7px;font-weight:500;}
+.field-wrap input,.field-wrap textarea{
+  width:100%;padding:11px 13px;
+  border:0.5px solid var(--border);border-radius:var(--radius-sm);
+  font-size:15px;color:#2C2C2A;background:#fafaf8;outline:none;font-family:inherit;
+}
+.field-wrap input:focus,.field-wrap textarea:focus{border-color:var(--red);}
+.field-wrap textarea{resize:none;height:80px;}
+
+/* 완료 화면 */
+.done-screen{text-align:center;padding:52px 24px 40px;}
+.done-circle{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:36px;}
+.done-circle.ok{background:var(--green-light);}
+.done-circle.warn{background:var(--amber-light);}
+.done-title{font-size:24px;font-weight:700;}
+.done-title.ok{color:var(--green);}
+.done-title.warn{color:var(--amber);}
+.done-info{margin:20px 0;background:var(--gray-light);border-radius:var(--radius-sm);padding:14px 16px;text-align:left;}
+.done-row{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;}
+.done-row span:first-child{color:var(--gray);}
+.done-row span:last-child{font-weight:500;}
+
+/* QR */
+.qr-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+.qr-card{background:#fff;border:0.5px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center;}
+.qr-building{font-size:10px;font-weight:600;color:var(--gray);letter-spacing:0.05em;margin-bottom:4px;}
+.qr-id{font-size:13px;font-weight:700;color:var(--red-dark);margin-top:8px;}
+.qr-loc{font-size:10px;color:var(--gray);margin-top:2px;line-height:1.4;}
+
+/* 관리 */
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+.stat-box{background:#fff;border:0.5px solid var(--border);border-radius:var(--radius-sm);padding:14px 10px;text-align:center;}
+.stat-num{font-size:28px;font-weight:700;}
+.stat-lbl{font-size:11px;color:var(--gray);margin-top:2px;}
+.s-total .stat-num{color:var(--blue-dark);}
+.s-pass .stat-num{color:var(--green);}
+.s-fail .stat-num{color:var(--red);}
+
+.log-row{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-bottom:0.5px solid var(--border);}
+.log-row:last-child{border-bottom:none;}
+.log-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0;}
+.log-dot.pass{background:var(--green-mid);}
+.log-dot.fail{background:var(--red);}
+.log-main{font-size:13px;font-weight:500;}
+.log-sub{font-size:12px;color:var(--gray);margin-top:2px;}
+.log-time{font-size:11px;color:var(--gray);white-space:nowrap;margin-left:auto;text-align:right;line-height:1.5;}
+.log-building{font-size:10px;font-weight:600;padding:2px 6px;border-radius:6px;display:inline-block;margin-bottom:2px;}
+.lb-main{background:var(--blue-light);color:var(--blue-dark);}
+.lb-new{background:var(--green-light);color:var(--green);}
+.lb-annex{background:var(--amber-light);color:var(--amber);}
+
+/* 업로드 상태 */
+.upload-status{font-size:12px;margin-top:10px;padding:10px 14px;border-radius:var(--radius-sm);text-align:center;}
+.upload-status.uploading{background:var(--blue-light);color:var(--blue-dark);}
+.upload-status.success{background:var(--green-light);color:var(--green);}
+.upload-status.error{background:var(--red-light);color:var(--red-dark);}
+
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#2C2C2A;color:#fff;padding:12px 24px;border-radius:24px;font-size:14px;font-weight:500;opacity:0;pointer-events:none;transition:opacity 0.25s;z-index:999;white-space:nowrap;}
+.toast.show{opacity:1;}
+
+@media print{.tab-bar,.no-print{display:none!important;}.page{display:block!important;padding:0;}}
+</style>
+</head>
+<body>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="showTab('inspect',this)">📋 점검</button>
+  <button class="tab-btn" onclick="showTab('qr',this)">🔲 QR코드</button>
+  <button class="tab-btn" onclick="showTab('admin',this)">📊 관리</button>
+</div>
+
+<!-- ══ 탭1: 점검 ══ -->
+<div id="tab-inspect" class="page active">
+  <p class="section-label" style="margin-top:4px">건물 선택</p>
+  <div class="building-grid" id="building-grid">
+    <div class="building-btn active" onclick="selectBuilding('main',this)">
+      <div class="b-icon">🏥</div>
+      <div class="b-name">본관</div>
+      <div class="b-count" id="bc-main">0/0</div>
+    </div>
+    <div class="building-btn" onclick="selectBuilding('new',this)">
+      <div class="b-icon">🏢</div>
+      <div class="b-name">신관</div>
+      <div class="b-count" id="bc-new">0/0</div>
+    </div>
+    <div class="building-btn" onclick="selectBuilding('annex',this)">
+      <div class="b-icon">🏬</div>
+      <div class="b-name">별관</div>
+      <div class="b-count" id="bc-annex">0/0</div>
+    </div>
+  </div>
+
+  <div id="floor-area"></div>
+</div>
+
+<!-- ══ 탭2: QR ══ -->
+<div id="tab-qr" class="page">
+  <p class="section-label" style="margin-top:4px">인쇄용 QR코드</p>
+  <p style="font-size:13px;color:var(--gray);margin-bottom:14px;">소화기에 부착 후 스캔하면 점검폼이 바로 열립니다.</p>
+  <div class="building-grid no-print">
+    <div class="building-btn active" onclick="selectQRBuilding('main',this)" id="qrb-main">
+      <div class="b-name">본관</div>
+    </div>
+    <div class="building-btn" onclick="selectQRBuilding('new',this)" id="qrb-new">
+      <div class="b-name">신관</div>
+    </div>
+    <div class="building-btn" onclick="selectQRBuilding('annex',this)" id="qrb-annex">
+      <div class="b-name">별관</div>
+    </div>
+  </div>
+  <div class="qr-grid" id="qr-grid"></div>
+  <div style="margin-top:14px" class="no-print">
+    <button class="btn btn-gray" onclick="window.print()">🖨️ 인쇄</button>
+  </div>
+</div>
+
+<!-- ══ 탭3: 관리 ══ -->
+<div id="tab-admin" class="page">
+  <p class="section-label" style="margin-top:4px">전체 현황</p>
+  <div class="stats-row">
+    <div class="stat-box s-total"><div class="stat-num" id="st-total">-</div><div class="stat-lbl">전체</div></div>
+    <div class="stat-box s-pass"><div class="stat-num" id="st-pass">0</div><div class="stat-lbl">완료</div></div>
+    <div class="stat-box s-fail"><div class="stat-num" id="st-fail">0</div><div class="stat-lbl">특이사항</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+    <button class="btn btn-red no-print" onclick="downloadExcel()">📥 엑셀</button>
+    <button class="btn btn-gray no-print" onclick="loadAdminData()">🔄 새로고침</button>
+  </div>
+  <div class="card">
+    <div id="log-list"><div style="padding:32px;text-align:center;color:var(--gray);font-size:14px;">로딩 중...</div></div>
+  </div>
+</div>
+
+<!-- ══ 점검 폼 오버레이 ══ -->
+<div class="overlay" id="form-overlay">
+  <div style="max-width:480px;margin:0 auto;padding:16px;">
+
+    <!-- 입력 -->
+    <div id="form-view">
+      <button onclick="closeForm()" style="background:none;border:none;color:var(--gray);font-size:14px;cursor:pointer;padding:4px 0;margin-bottom:12px;">← 목록으로</button>
+      <div class="card">
+        <div class="form-header">
+          <div class="form-building" id="f-building"></div>
+          <div class="form-ext-id" id="f-id"></div>
+          <div class="form-location" id="f-loc"></div>
+          <div class="form-meta" id="f-meta"></div>
+        </div>
+        <div class="field-wrap">
+          <div class="field-label">점검자 이름 *</div>
+          <input type="text" id="f-inspector" placeholder="이름을 입력하세요" autocomplete="name">
+        </div>
+        <div class="field-wrap">
+          <div class="field-label">특이사항 (없으면 비워두세요)</div>
+          <textarea id="f-note" placeholder="예) 압력계 수치 낮음, 호스 교체 필요…"></textarea>
+        </div>
+      </div>
+      <div id="upload-status-wrap"></div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-green" id="submit-btn" onclick="saveInspection()">✓ 점검 완료</button>
+      </div>
+    </div>
+
+    <!-- 완료 -->
+    <div id="done-view" style="display:none;">
+      <div class="done-screen">
+        <div class="done-circle" id="done-circle"></div>
+        <div class="done-title" id="done-title"></div>
+        <div style="font-size:14px;color:var(--gray);margin-top:8px;" id="done-sub"></div>
+        <div class="done-info" id="done-info"></div>
+        <div id="done-upload-status"></div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px;">
+          <button class="btn btn-green" onclick="goNext()">다음 소화기 점검 →</button>
+          <button class="btn btn-gray" onclick="closeForm()">목록으로</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════
+// 설정
+// ══════════════════════════════════
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzEAq59qWwFDzeD-ujiuslwULqVlGtPIYWcwACoVdA4Gd4e-PZTUijsDQBNNIYmCNUB2A/exec";
+
+// 소화기 데이터
+const BUILDINGS = {
+  main: {
+    name:"본관", icon:"🏥", labelClass:"lb-main",
+    floors:{
+      "1층":[
+        {id:"M101", loc:"원무과 앞",       type:"ABC 분말"},
+        {id:"M102", loc:"응급실 입구",      type:"CO₂"},
+        {id:"M103", loc:"약국 옆",          type:"ABC 분말"},
+        {id:"M104", loc:"계단실 A",         type:"ABC 분말"},
+      ],
+      "2층":[
+        {id:"M201", loc:"외래 대기실",      type:"ABC 분말"},
+        {id:"M202", loc:"검사실 복도",      type:"ABC 분말"},
+        {id:"M203", loc:"계단실 B",         type:"ABC 분말"},
+      ],
+      "3층":[
+        {id:"M301", loc:"입원병동 복도",    type:"ABC 분말"},
+        {id:"M302", loc:"간호사실 옆",      type:"ABC 분말"},
+        {id:"M303", loc:"계단실 C",         type:"ABC 분말"},
+      ],
+    }
+  },
+  new: {
+    name:"신관", icon:"🏢", labelClass:"lb-new",
+    floors:{
+      "1층":[
+        {id:"N101", loc:"로비 입구",        type:"ABC 분말"},
+        {id:"N102", loc:"안내데스크 옆",    type:"CO₂"},
+        {id:"N103", loc:"계단실 A",         type:"ABC 분말"},
+      ],
+      "2층":[
+        {id:"N201", loc:"외래진료 복도",    type:"ABC 분말"},
+        {id:"N202", loc:"처치실 앞",        type:"ABC 분말"},
+        {id:"N203", loc:"계단실 B",         type:"ABC 분말"},
+      ],
+      "3층":[
+        {id:"N301", loc:"병동 복도",        type:"ABC 분말"},
+        {id:"N302", loc:"린넨실 옆",        type:"ABC 분말"},
+      ],
+    }
+  },
+  annex: {
+    name:"별관", icon:"🏬", labelClass:"lb-annex",
+    floors:{
+      "3층":[
+        {id:"C01",  loc:"중앙통제실 입구",  type:"ABC 분말"},
+        {id:"C02",  loc:"중앙통제실 복도",  type:"ABC 분말"},
+        {id:"D01",  loc:"회의실 앞",        type:"ABC 분말"},
+        {id:"D02",  loc:"고충상담실 옆",    type:"CO₂"},
+        {id:"D03",  loc:"재무관리팀1 앞",   type:"ABC 분말"},
+        {id:"D04",  loc:"재무관리팀2 옆",   type:"ABC 분말"},
+        {id:"D20",  loc:"적정진료팀 복도",  type:"ABC 분말"},
+        {id:"D23",  loc:"미세수술 실험실",  type:"CO₂"},
+        {id:"D24",  loc:"계단실 A",         type:"ABC 분말"},
+        {id:"D25",  loc:"비상구 근처",      type:"ABC 분말"},
+      ]
+    }
+  }
+};
+
+// ── 상태 ──
+let curBuilding = "main";
+let curId = null;
+let localRecords = JSON.parse(localStorage.getItem("fe_prod") || "{}");
+let qrBuilding = "main";
+let qrRendered = {};
+
+// ── 전체 소화기 플랫 리스트 ──
+function allExts() {
+  const list = [];
+  for (const [bKey, b] of Object.entries(BUILDINGS)) {
+    for (const [floor, exts] of Object.entries(b.floors)) {
+      exts.forEach(e => list.push({...e, building:bKey, buildingName:b.name, floor}));
+    }
+  }
+  return list;
+}
+
+function getExt(id) { return allExts().find(e => e.id === id); }
+
+// ══ 탭 ══
+function showTab(name, btn) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("tab-" + name).classList.add("active");
+  btn.classList.add("active");
+  if (name === "admin") loadAdminData();
+  if (name === "qr") renderQR(qrBuilding);
+}
+
+// ══ 건물 선택 ══
+function selectBuilding(key, el) {
+  curBuilding = key;
+  document.querySelectorAll(".building-grid .building-btn").forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+  renderFloors();
+}
+
+function renderFloors() {
+  const b = BUILDINGS[curBuilding];
+  const area = document.getElementById("floor-area");
+  let html = "";
+  for (const [floor, exts] of Object.entries(b.floors)) {
+    const done = exts.filter(e => localRecords[e.id]).length;
+    const progPct = Math.round(done / exts.length * 100);
+    html += `<p class="section-label">${floor}</p>
+    <div class="prog-track"><div class="prog-fill" style="width:${progPct}%"></div></div>
+    <p class="prog-text" style="margin-bottom:10px;">${done} / ${exts.length} 완료</p>
+    <div class="ext-grid" style="margin-bottom:20px;">`;
+    exts.forEach(e => {
+      const r = localRecords[e.id];
+      let cls = "", badge = `<span class="badge badge-pending">미점검</span>`;
+      if (r) {
+        cls = r.note ? "is-fail" : "is-done";
+        badge = r.note ? `<span class="badge badge-fail">특이사항</span>` : `<span class="badge badge-done">완료</span>`;
+      }
+      html += `<div class="ext-card ${cls}" onclick="openForm('${e.id}')">
+        <div class="ec-id">${e.id}</div>
+        <div class="ec-loc">${e.loc}</div>${badge}
+      </div>`;
+    });
+    html += `</div>`;
+  }
+  area.innerHTML = html;
+  updateBuildingCounts();
+}
+
+function updateBuildingCounts() {
+  for (const [key, b] of Object.entries(BUILDINGS)) {
+    const exts = allExts().filter(e => e.building === key);
+    const done = exts.filter(e => localRecords[e.id]).length;
+    document.getElementById("bc-" + key).textContent = done + "/" + exts.length;
+  }
+}
+
+// ══ 점검 폼 ══
+function openForm(id) {
+  curId = id;
+  const ext = getExt(id);
+  const b = BUILDINGS[ext.building];
+  const prev = localRecords[id];
+
+  document.getElementById("f-building").textContent = b.icon + " " + b.name + " " + ext.floor;
+  document.getElementById("f-id").textContent = ext.id;
+  document.getElementById("f-loc").textContent = ext.loc;
+  document.getElementById("f-meta").textContent = "분당제생병원 · " + ext.type;
+  document.getElementById("f-inspector").value = prev ? prev.inspector : (localStorage.getItem("fe_last_name") || "");
+  document.getElementById("f-note").value = prev ? (prev.note || "") : "";
+  document.getElementById("upload-status-wrap").innerHTML = "";
+  document.getElementById("submit-btn").disabled = false;
+  document.getElementById("submit-btn").textContent = "✓ 점검 완료";
+
+  document.getElementById("form-view").style.display = "block";
+  document.getElementById("done-view").style.display = "none";
+  document.getElementById("form-overlay").classList.add("show");
+  window.scrollTo(0, 0);
+  setTimeout(() => document.getElementById("f-inspector").focus(), 300);
+}
+
+function closeForm() {
+  document.getElementById("form-overlay").classList.remove("show");
+  renderFloors();
+}
+
+// ══ 저장 + 구글 시트 업로드 ══
+async function saveInspection() {
+  const inspector = document.getElementById("f-inspector").value.trim();
+  if (!inspector) { showToast("점검자 이름을 입력해주세요"); document.getElementById("f-inspector").focus(); return; }
+
+  const note = document.getElementById("f-note").value.trim();
+  const ext = getExt(curId);
+  const b = BUILDINGS[ext.building];
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("ko-KR");
+  const timeStr = now.toLocaleTimeString("ko-KR", {hour:"2-digit", minute:"2-digit"});
+
+  const payload = {
+    building: b.name,
+    floor: ext.floor,
+    id: ext.id,
+    location: ext.loc,
+    type: ext.type,
+    inspector,
+    note,
+    date: dateStr,
+    time: timeStr,
+  };
+
+  // 로컬 저장
+  localRecords[curId] = {...payload, ts: now.toISOString()};
+  localStorage.setItem("fe_prod", JSON.stringify(localRecords));
+  localStorage.setItem("fe_last_name", inspector);
+
+  // 완료 화면 먼저 표시
+  showDoneScreen(ext, b, inspector, note, dateStr, timeStr);
+
+  // 구글 시트 업로드 (백그라운드)
+  const statusEl = document.getElementById("done-upload-status");
+  statusEl.innerHTML = `<div class="upload-status uploading">☁ 구글 시트에 저장 중...</div>`;
+
+  try {
+    const res = await fetch(GAS_URL, {
+      method:"POST",
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (json.result === "success") {
+      statusEl.innerHTML = `<div class="upload-status success">✓ 구글 시트 저장 완료</div>`;
+    } else {
+      throw new Error(json.message);
+    }
+  } catch (err) {
+    statusEl.innerHTML = `<div class="upload-status error">⚠ 시트 저장 실패 (로컬에는 저장됨)<br><small>${err.message}</small></div>`;
+  }
+}
+
+function showDoneScreen(ext, b, inspector, note, dateStr, timeStr) {
+  const hasNote = !!note;
+  document.getElementById("done-circle").textContent = hasNote ? "⚠" : "✓";
+  document.getElementById("done-circle").className = "done-circle " + (hasNote ? "warn" : "ok");
+  document.getElementById("done-title").textContent = hasNote ? "특이사항 기록됨" : "점검 완료";
+  document.getElementById("done-title").className = "done-title " + (hasNote ? "warn" : "ok");
+  document.getElementById("done-sub").textContent = ext.loc;
+  document.getElementById("done-info").innerHTML = `
+    <div class="done-row"><span>건물</span><span>${b.name} ${ext.floor}</span></div>
+    <div class="done-row"><span>소화기</span><span>${ext.id}</span></div>
+    <div class="done-row"><span>점검자</span><span>${inspector}</span></div>
+    <div class="done-row"><span>일시</span><span>${dateStr} ${timeStr}</span></div>
+    ${note ? `<div class="done-row"><span>특이사항</span><span style="color:var(--red)">${note}</span></div>` : `<div class="done-row"><span>특이사항</span><span style="color:var(--green)">없음</span></div>`}
+  `;
+  document.getElementById("form-view").style.display = "none";
+  document.getElementById("done-view").style.display = "block";
+}
+
+function goNext() {
+  const remaining = allExts().filter(e => e.building === curBuilding && !localRecords[e.id]);
+  if (remaining.length === 0) {
+    showToast("🎉 이 건물 점검 완료!");
+    closeForm();
+  } else {
+    openForm(remaining[0].id);
+  }
+}
+
+// ══ QR ══
+function selectQRBuilding(key, el) {
+  qrBuilding = key;
+  document.querySelectorAll("#tab-qr .building-btn").forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+  renderQR(key);
+}
+
+function renderQR(bKey) {
+  const grid = document.getElementById("qr-grid");
+  if (qrRendered[bKey]) return;
+  qrRendered[bKey] = true;
+  grid.innerHTML = "";
+  const b = BUILDINGS[bKey];
+  const base = window.location.href.split("?")[0];
+  const exts = allExts().filter(e => e.building === bKey);
+  exts.forEach(e => {
+    const url = base + "?ext=" + e.id;
+    const card = document.createElement("div");
+    card.className = "qr-card";
+    card.innerHTML = `<div class="qr-building">${b.name} ${e.floor}</div><div id="qrbox-${e.id}"></div><div class="qr-id">${e.id}</div><div class="qr-loc">${e.loc}</div>`;
+    grid.appendChild(card);
+    setTimeout(() => {
+      new QRCode(document.getElementById("qrbox-" + e.id), {
+        text:url, width:110, height:110, colorDark:"#2C2C2A", colorLight:"#fff"
+      });
+    }, 80);
+  });
+}
+
+// ══ 관리 ══
+async function loadAdminData() {
+  document.getElementById("log-list").innerHTML = `<div style="padding:24px;text-align:center;color:var(--gray);font-size:14px;">불러오는 중...</div>`;
+  try {
+    const res = await fetch(GAS_URL);
+    const json = await res.json();
+    renderAdmin(json.records || []);
+  } catch (err) {
+    // 오프라인 시 로컬 데이터로 대체
+    renderAdmin(Object.values(localRecords));
+    showToast("오프라인 — 로컬 데이터 표시 중");
+  }
+}
+
+function renderAdmin(records) {
+  const withNote = records.filter(r => r["특이사항"] || r.note).length;
+  document.getElementById("st-total").textContent = allExts().length;
+  document.getElementById("st-pass").textContent = records.length;
+  document.getElementById("st-fail").textContent = withNote;
+
+  const log = document.getElementById("log-list");
+  if (!records.length) {
+    log.innerHTML = `<div style="padding:32px;text-align:center;color:var(--gray);font-size:14px;">아직 점검 기록이 없습니다</div>`;
+    return;
+  }
+  const sorted = [...records].reverse();
+  log.innerHTML = sorted.map(r => {
+    const bKey = Object.keys(BUILDINGS).find(k => BUILDINGS[k].name === (r["건물"] || r.building));
+    const lblCls = bKey ? BUILDINGS[bKey].labelClass : "lb-main";
+    const bName = r["건물"] || r.building || "";
+    const floor = r["층"] || r.floor || "";
+    const extId = r["소화기ID"] || r.id || "";
+    const loc   = r["위치"] || r.location || "";
+    const insp  = r["점검자"] || r.inspector || "";
+    const note  = r["특이사항"] || r.note || "";
+    const date  = r["점검일자"] || r.date || "";
+    const time  = r["점검시간"] || r.time || "";
+    return `<div class="log-row">
+      <div class="log-dot ${note ? "fail" : "pass"}"></div>
+      <div style="flex:1;min-width:0;">
+        <div><span class="log-building ${lblCls}">${bName} ${floor}</span></div>
+        <div class="log-main">${extId} · ${loc}</div>
+        <div class="log-sub">${insp}${note ? " · ⚠ " + note : " · 이상없음"}</div>
+      </div>
+      <div class="log-time">${date}<br>${time}</div>
+    </div>`;
+  }).join("");
+}
+
+// ══ 엑셀 ══
+async function downloadExcel() {
+  showToast("데이터 불러오는 중...");
+  try {
+    const res = await fetch(GAS_URL);
+    const json = await res.json();
+    const records = json.records || [];
+    if (!records.length) { showToast("점검 기록이 없습니다"); return; }
+    const ws = XLSX.utils.json_to_sheet(records.map(r => ({
+      "건물": r["건물"]||r.building, "층": r["층"]||r.floor,
+      "소화기ID": r["소화기ID"]||r.id, "위치": r["위치"]||r.location,
+      "종류": r["종류"]||r.type, "점검자": r["점검자"]||r.inspector,
+      "특이사항": r["특이사항"]||r.note||"",
+      "점검일자": r["점검일자"]||r.date, "점검시간": r["점검시간"]||r.time,
+    })));
+    ws["!cols"] = [{wch:8},{wch:6},{wch:8},{wch:18},{wch:10},{wch:10},{wch:24},{wch:14},{wch:8}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "소화기점검");
+    const d = new Date().toLocaleDateString("ko-KR").replace(/\. /g,"").replace(".","");
+    XLSX.writeFile(wb, `소화기점검_분당제생병원_${d}.xlsx`);
+    showToast("엑셀 저장 완료");
+  } catch {
+    showToast("데이터 불러오기 실패");
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+// ══ QR 파라미터로 직접 열기 (스캔 시) ══
+const urlExt = new URLSearchParams(window.location.search).get("ext");
+if (urlExt && getExt(urlExt)) {
+  openForm(urlExt);
+} else {
+  renderFloors();
+  updateBuildingCounts();
+}
+</script>
+</body>
+</html>
